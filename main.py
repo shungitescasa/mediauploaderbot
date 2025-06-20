@@ -69,6 +69,11 @@ async def download_file(update: Update, _: CallbackContext) -> None:
         file_path = await download_locally_file(update, update.message.animation)
     elif update.message.document is not None:
         file_path = await download_locally_file(update, update.message.document)
+    elif update.message.text is not None:
+        file_path = f"./temp/{update.message.chat.id}-{update.message.message_id}.txt"
+        with open(file_path, "w") as txtf:
+            txtf.write(update.message.text)
+            txtf.close()
 
     if file_path is not None:
         try:
@@ -86,7 +91,7 @@ def run():
     app.add_handler(MessageHandler(
         filters.PHOTO | filters.VIDEO | filters.VIDEO_NOTE |
         filters.VOICE | filters.AUDIO | filters.ANIMATION |
-        filters.Document.ALL,
+        filters.Document.ALL | (filters.TEXT & ~filters.COMMAND),
         download_file
     ))
     app.run_polling()
