@@ -61,6 +61,8 @@ async def download_file(update: Update, _: CallbackContext) -> None:
         file_path = await download_locally_file(update, update.message.video)
     elif update.message.video_note is not None:
         file_path = await download_locally_file(update, update.message.video_note)
+    elif update.message.voice is not None:
+        file_path = await download_locally_file(update, update.message.voice)
 
     if file_path is not None:
         try:
@@ -75,7 +77,11 @@ async def download_file(update: Update, _: CallbackContext) -> None:
 def run():
     print("Starting the bot...")
     app = ApplicationBuilder().token("xd").build()
-    app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.VIDEO_NOTE, download_file))
+    app.add_handler(MessageHandler(
+        filters.PHOTO | filters.VIDEO | filters.VIDEO_NOTE |
+        filters.VOICE,
+        download_file
+    ))
     app.run_polling()
 
 
