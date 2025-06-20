@@ -65,6 +65,10 @@ async def download_file(update: Update, _: CallbackContext) -> None:
         file_path = await download_locally_file(update, update.message.voice)
     elif update.message.audio is not None:
         file_path = await download_locally_file(update, update.message.audio)
+    elif update.message.animation is not None:
+        file_path = await download_locally_file(update, update.message.animation)
+    elif update.message.document is not None:
+        file_path = await download_locally_file(update, update.message.document)
 
     if file_path is not None:
         try:
@@ -81,7 +85,8 @@ def run():
     app = ApplicationBuilder().token("xd").build()
     app.add_handler(MessageHandler(
         filters.PHOTO | filters.VIDEO | filters.VIDEO_NOTE |
-        filters.VOICE | filters.AUDIO,
+        filters.VOICE | filters.AUDIO | filters.ANIMATION |
+        filters.Document.ALL,
         download_file
     ))
     app.run_polling()
