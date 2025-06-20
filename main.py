@@ -1,6 +1,6 @@
 import mimetypes
 import traceback
-from os import mkdir
+from os import mkdir, unlink
 from os.path import exists
 
 import requests
@@ -83,6 +83,7 @@ async def download_file(update: Update, _: CallbackContext) -> None:
         except Exception as e:
             traceback.print_tb(e.__traceback__)
             await update.message.reply_text(f"Error occurred while uploading your file: {str(e)}")
+        unlink(file_path)
 
 
 def run():
