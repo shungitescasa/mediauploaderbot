@@ -36,24 +36,29 @@ def upload_file(file_path: str, comment: str) -> str:
         raise Exception(f"Failed to send a file ({response.status_code}): {response.text}")
 
 
+async def download_locally_file(update, file_id):
+    file = await update.get_bot().get_file(file_id)
+    file_extension = ""
+
+    if file.file_path is not None:
+        file_extension = f".{file.file_path.split('.')[-1]}".lower()
+
+    file_path = f"./temp/{file_id.file_unique_id}{file_extension}"
+    await file.download_to_drive(file_path)
+    return file_path
+
+
 async def download_file(update: Update, _: CallbackContext) -> None:
     if not exists("./temp"):
         mkdir("./temp")
 
     file_path = None
-    file_comment = ""
+    file_comment = update.message.caption
 
     if len(update.message.photo) > 0:
-        file_id = update.message.photo[-1]
-        file = await update.get_bot().get_file(file_id)
-        file_extension = ""
-
-        if file.file_path is not None:
-            file_extension = f".{file.file_path.split('.')[-1]}"
-
-        file_path = f"./temp/{file_id.file_unique_id}{file_extension}"
-        await file.download_to_drive(file_path)
-        file_comment = update.message.caption
+        file_path = await download_locally_file(update, update.message.photo[-1])
+    elif update.message.video is not None:
+        file_path = await download_locally_file(update, update.message.video)
 
     if file_path is not None:
         try:
@@ -68,7 +73,7 @@ async def download_file(update: Update, _: CallbackContext) -> None:
 def run():
     print("Starting the bot...")
     app = ApplicationBuilder().token("xd").build()
-    app.add_handler(MessageHandler(filters.PHOTO, download_file))
+    app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO, download_file))
     app.run_polling()
 
 
