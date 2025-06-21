@@ -1,39 +1,13 @@
-import mimetypes
 import traceback
 from os import mkdir, unlink
 from os.path import exists
 
-import requests
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, MessageHandler, CallbackContext, filters
 
-
-def upload_file(file_path: str, comment: str) -> str:
-    mime_type, _ = mimetypes.guess_type(file_path)
-
-    if mime_type is None:
-        raise Exception("Unknown MIME type")
-
-    response = requests.post(
-        'https://tnd.quest/upload.php',
-        files=dict(
-            file=(file_path.split('/')[-1], open(file_path, 'rb'), mime_type)
-        ),
-        data=dict(
-            comment=comment,
-            visibility=1
-        ),
-        headers=dict(
-            accept='application/json'
-        )
-    )
-
-    if response.status_code == 201:
-        j = response.json()
-        return j['data']['urls']['download_url']
-    else:
-        raise Exception(f"Failed to send a file ({response.status_code}): {response.text}")
+from extsrc import extsrc_add_handler
+from file import upload_file
 
 
 async def download_locally_file(update, file_id):
@@ -92,9 +66,10 @@ def run():
     app.add_handler(MessageHandler(
         filters.PHOTO | filters.VIDEO | filters.VIDEO_NOTE |
         filters.VOICE | filters.AUDIO | filters.ANIMATION |
-        filters.Document.ALL | (filters.TEXT & ~filters.COMMAND),
+        filters.Document.ALL,
         download_file
     ))
+    extsrc_add_handler(app)
     app.run_polling()
 
 
