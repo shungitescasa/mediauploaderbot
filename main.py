@@ -1,4 +1,6 @@
+import os.path
 import traceback
+from configparser import ConfigParser
 from os import mkdir, unlink
 from os.path import exists
 
@@ -61,8 +63,17 @@ async def download_file(update: Update, _: CallbackContext) -> None:
 
 
 def run():
-    print("Starting the bot...")
-    app = ApplicationBuilder().token("xd").build()
+    if not os.path.exists("config.ini"):
+        raise Exception("config.ini not found. Look up in README for more info...")
+
+    cfg = ConfigParser()
+    cfg.read("config.ini")
+
+    if 'telegram' not in cfg or 'token' not in cfg['telegram']:
+        raise Exception("No Telegram token found. Set 'token' field in [telegram] section.")
+
+    print("Bot is running...")
+    app = ApplicationBuilder().token(cfg['telegram']['token']).build()
     app.add_handler(MessageHandler(
         filters.PHOTO | filters.VIDEO | filters.VIDEO_NOTE |
         filters.VOICE | filters.AUDIO | filters.ANIMATION |
