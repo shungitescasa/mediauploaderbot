@@ -3,3 +3,4 @@ venv/
 temp/
 *.db
 *.ini
+__pycache__/

@@ -6,10 +6,13 @@ from os.path import exists
 
 from telegram import Update
 from telegram.constants import ParseMode
-from telegram.ext import ApplicationBuilder, MessageHandler, CallbackContext, filters
+from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, MessageHandler, CallbackContext, filters
 
+from commands.configuration import *
 from extsrc import extsrc_add_handler
 from file import upload_file
+
+import utils
 
 
 async def download_locally_file(update, file_id):
@@ -63,14 +66,9 @@ async def download_file(update: Update, _: CallbackContext) -> None:
 
 
 def run():
-    if not os.path.exists("config.ini"):
-        raise Exception("config.ini not found. Look up in README for more info...")
+    cfg = utils.get_configuration()
 
-    cfg = ConfigParser()
-    cfg.read("config.ini")
-
-    if 'telegram' not in cfg or 'token' not in cfg['telegram']:
-        raise Exception("No Telegram token found. Set 'token' field in [telegram] section.")
+    uploader.init_uploader_db()
 
     print("Bot is running...")
     app = ApplicationBuilder().token(cfg['telegram']['token']).build()
@@ -80,6 +78,8 @@ def run():
         filters.Document.ALL,
         download_file
     ))
+    app.add_handler(CommandHandler("start", user_introduction))
+    app.add_handler(CallbackQueryHandler(inline_buttons))
     extsrc_add_handler(app)
     app.run_polling()
 
