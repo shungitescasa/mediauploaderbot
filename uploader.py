@@ -1,4 +1,10 @@
+import mimetypes
+import random
 import sqlite3
+import os
+import string
+from typing import Tuple
+import requests
 
 import utils
 
@@ -10,6 +16,14 @@ class UploaderData:
         self.headers = headers
         self.image_link = image_link
         self.deletion_link = deletion_link
+
+    def parsed_url(self):
+        from urllib.parse import urlparse
+        return urlparse(self.url)
+
+    def base_url(self):
+        u = self.parsed_url()
+        return u.scheme + "://" + u.hostname
 
 def init_uploader_db():
     cfg = utils.get_configuration()
@@ -89,6 +103,68 @@ def set_uploader(chat_id: int, uploader: UploaderData):
     finally:
         if conn:
             conn.close()
+
+def get_nested(data: dict, path: str) -> str | None:
+    if path[0] == "{" and path[-1] == "}":
+        path = path[1:-1]
+
+    for key in path.split("."):
+        if not isinstance(data, dict) or key not in data:
+            return None
+        data = data[key]
+
+    return data if isinstance(data, str) else None
+
+def upload_directory(chat_uploader: UploaderData, directory_path: str) -> Tuple[str,str|None]:
+    files = []
+
+    with os.scandir(directory_path) as dir:
+        for file in dir:
+            mime_type, _ = mimetypes.guess_type(file.path)
+            if mime_type is None:
+                raise Exception("Unknown MIME type: " + file.path)
+
+            files.append((
+                chat_uploader.field,
+                (file.path.split('/')[-1], open(file.path, 'rb'), mime_type)
+            ))
+
+    response = requests.post(
+        chat_uploader.url,
+        files=files,
+        data=dict(
+            password=''.join(random.choices(string.ascii_letters + string.digits, k=16)),
+            single_url=1,
+            strip_exif_data=1
+        ),
+        headers=dict(
+            accept='application/json'
+        )
+    )
+
+    content_type = response.headers.get("Content-Type")
+
+    image_link = None
+    deletion_link = None
+
+    if response.status_code < 300:
+        if content_type is not None and "application/json" in content_type:
+            j = response.json()
+            image_link = get_nested(j, chat_uploader.image_link)
+            deletion_link = None
+            if chat_uploader.deletion_link is not None:
+                deletion_link = get_nested(j, chat_uploader.deletion_link)
+    else:
+        raise Exception(f"Failed to send a file ({response.status_code}): {response.text}")
+
+    if image_link:
+        return (image_link, deletion_link)
+    else:
+        return (response.url, None)
+
+def delete_file(chat_uploader: UploaderData, url: str) -> bool:
+    response = requests.delete(chat_uploader.base_url() + url)
+    return response.status_code == 200 or response.status_code == 404
 
 ACCEPTABLE_UPLOADERS = {
     "tnd.quest": UploaderData("https://tnd.quest/upload", "file[]", "Accept: application/json", "{data.urls.download_url}", "{data.urls.deletion_url}"),
