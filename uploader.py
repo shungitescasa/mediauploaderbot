@@ -173,19 +173,29 @@ def upload_directory(chat_uploader: UploaderData, directory_path: str) -> Tuple[
     )
 
     content_type = response.headers.get("Content-Type")
+    is_json_response = content_type is not None and "application/json" in content_type
 
     image_link = None
     deletion_link = None
 
     if response.status_code < 300:
-        if content_type is not None and "application/json" in content_type:
+        if is_json_response:
             j = response.json()
             image_link = get_nested(j, chat_uploader.image_link)
             deletion_link = None
             if chat_uploader.deletion_link is not None:
                 deletion_link = get_nested(j, chat_uploader.deletion_link)
+        else:
+            image_link = response.url
     else:
-        raise Exception(f"Failed to send a file ({response.status_code}): {response.text}")
+        text = response.text
+        if is_json_response:
+            j = response.json()
+            # tnd.quest
+            if 'data' in j and 'error' in j['data']:
+                text = j['data']['error']
+
+        raise Exception(f"Failed to upload a file ({response.status_code}): {text}")
 
     if image_link:
         return (image_link, deletion_link)
@@ -193,7 +203,16 @@ def upload_directory(chat_uploader: UploaderData, directory_path: str) -> Tuple[
         return (response.url, None)
 
 def delete_file(chat_uploader: UploaderData, url: str) -> bool:
-    response = requests.delete(chat_uploader.base_url() + url)
+    if url.startswith("/"):
+        url = chat_uploader.base_url() + url
+
+    # kappa.lol has specific API for file deletion
+    if "kappa.lol" in url or "segs.lol" in url or "femboy.beauty" in url or "gachi.gay" in url:
+        from urllib.parse import urlparse
+        query = urlparse(url).query
+        url = chat_uploader.base_url() + "/api/delete?key=" + query
+
+    response = requests.delete(url)
     return response.status_code == 200 or response.status_code == 404
 
 ACCEPTABLE_UPLOADERS = {
