@@ -1,7 +1,5 @@
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
-from extsrc import extsrc_add_handler
-
 import utils
 import uploader
 import commands
@@ -21,8 +19,8 @@ def run():
         commands.reupload_file
     ))
     app.add_handler(CommandHandler("start", commands.user_introduction))
+    app.add_handler(CommandHandler("url", commands.reupload_url))
     app.add_handler(CallbackQueryHandler(commands.inline_buttons))
-    extsrc_add_handler(app)
     app.run_polling()
 
 

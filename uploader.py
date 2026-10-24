@@ -129,6 +129,9 @@ def upload_directory(chat_uploader: UploaderData, directory_path: str) -> Tuple[
                 (file.path.split('/')[-1], open(file.path, 'rb'), mime_type)
             ))
 
+    if len(files) == 0:
+        raise RuntimeError("No files to upload")
+
     response = requests.post(
         chat_uploader.url,
         files=files,

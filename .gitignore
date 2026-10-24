@@ -4,3 +4,4 @@ temp/
 *.db
 *.ini
 __pycache__/
+cookies.txt

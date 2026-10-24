@@ -1,11 +1,37 @@
 import tempfile
+import time
 import traceback
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 from telegram.constants import ParseMode
 from telegram.ext import CallbackContext
+import yt_dlp
 
 import uploader
+import utils
+
+async def reupload_directory(message: Message, chat_uploader: uploader.UploaderData, file_directory: str, update: Update, ctx: CallbackContext) -> None:
+    if update.message is None:
+        return
+
+    try:
+        image_link, deletion_link = uploader.upload_directory(chat_uploader, file_directory)
+
+        keyboard = []
+        if deletion_link is not None:
+            keyboard.append([InlineKeyboardButton("Delete", callback_data="/filedelete " + deletion_link)])
+
+        await message.delete()
+        await update.message.reply_text(f"✅ Saved! Here is your URL: [{image_link}]({image_link})",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_to_message_id=update.message.message_id,
+            reply_markup=InlineKeyboardMarkup(keyboard))
+    except RuntimeError as e:
+        await message.edit_text(f"🛑 {str(e)}")
+    except Exception as e:
+        traceback.print_tb(e.__traceback__)
+        await message.delete()
+        await update.message.reply_text(f"🛑 Error occurred while re-uploading files: {str(e)}", reply_to_message_id=update.message.message_id)
 
 async def download_telegram_file(update, file_id, file_directory):
     file = await update.get_bot().get_file(file_id)
@@ -19,7 +45,7 @@ async def download_telegram_file(update, file_id, file_directory):
     return file_path
 
 
-async def reupload_file(update: Update, _: CallbackContext) -> None:
+async def reupload_file(update: Update, ctx: CallbackContext) -> None:
     if update.message is None:
         return
 
@@ -65,21 +91,79 @@ async def reupload_file(update: Update, _: CallbackContext) -> None:
         return
 
     await message.edit_text(f"⏳ Re-uploading {file_counter} file(s)...")
+    await reupload_directory(message, chat_uploader, file_directory, update, ctx)
 
+
+async def reupload_url(update: Update, ctx: CallbackContext) -> None:
+    if update.message is None or ctx.args is None:
+        return
+
+    chat_uploader = uploader.get_uploader(update.message.chat_id)
+    if chat_uploader is None:
+        await update.message.reply_text("🛑 File uploader must be set before uploading any files!", reply_to_message_id=update.message.id)
+        return
+
+    if len(ctx.args) != 1:
+        await update.message.reply_text("🛑 Along with the command, you need to provide a URL (e.g. YouTube, X/Twitter, Tiktok).", reply_to_message_id=update.message.id)
+        return
+
+    directory = tempfile.mkdtemp(prefix="mubexternalfiles_")
+
+    cfg = utils.get_configuration()
+    ydl_cfg = None
+
+    if 'yt_dlp' in cfg:
+        c = cfg['yt_dlp']
+
+        o = [
+            "-o", directory + "/%(id)s.%(ext)s",
+            "--no-playlist",
+            "--merge-output-format", "mp4",
+            "--socket-timeout", "15",
+            "--retries", "3",
+            "--fragment-retries", "3",
+            "--extractor-retries", "2",
+            "--concurrent-fragments", "4",
+            "--max-filesize", "100M",
+            "--no-write-thumbnail",
+            "--no-write-info-json",
+            "--no-write-subs",
+            "--no-write-auto-subs",
+            "--quiet",
+            "--no-warnings",
+            "--no-progress",
+            "--no-cache-dir",
+        ]
+
+        if 'cookies' in c:
+            o.append('--cookies')
+            o.append(c['cookies'])
+
+        if 'cookiebrowser' in c:
+            o.append('--cookies-from-browser')
+            o.append(c['cookiebrowser'])
+
+        ydl_cfg = yt_dlp.parse_options(o)
+
+    if ydl_cfg is None:
+        await update.message.reply_text("🛑 External Source Downloader is not configured on this instance. Please try again later!", reply_to_message_id=update.message.id)
+        return
+
+    ydl_cfg = ydl_cfg.ydl_opts
+
+    ydl = yt_dlp.YoutubeDL(ydl_cfg)
+
+    message = await update.message.reply_text("⏳ Downloading from URL (may take a while)...", reply_to_message_id=update.message.message_id)
+
+    start_time = time.time()
     try:
-        image_link, deletion_link = uploader.upload_directory(chat_uploader, file_directory)
-
-        keyboard = []
-        if deletion_link is not None:
-            keyboard.append([InlineKeyboardButton("Delete", callback_data="/filedelete " + deletion_link)])
-
-        await message.delete()
-        await update.message.reply_text(f"✅ Saved! Here is your URL: [{image_link}]({image_link})",
-            parse_mode=ParseMode.MARKDOWN,
-            reply_to_message_id=update.message.message_id,
-            reply_markup=InlineKeyboardMarkup(keyboard))
-    except RuntimeError as e:
-        await message.edit_text(f"🛑 {str(e)}")
+        ydl.download(ctx.args[0])
     except Exception as e:
         traceback.print_tb(e.__traceback__)
-        await update.message.reply_text(f"🛑 Error occurred while re-uploading files: {str(e)}", reply_to_message_id=update.message.message_id)
+        await message.delete()
+        await update.message.reply_text(f"🛑 Failed to download a file. Please try again later!", reply_to_message_id=update.message.id)
+        return
+
+    await message.edit_text(f'⏳ Re-uploading (downloaded in {int(time.time() - start_time)}s)...')
+
+    await reupload_directory(message, chat_uploader, directory, update, ctx)
