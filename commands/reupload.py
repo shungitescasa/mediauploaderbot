@@ -2,7 +2,7 @@ import tempfile
 import time
 import traceback
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
+from telegram import CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 from telegram.constants import ParseMode
 from telegram.ext import CallbackContext
 import yt_dlp
@@ -17,15 +17,22 @@ async def reupload_directory(message: Message, chat_uploader: uploader.UploaderD
     try:
         image_link, deletion_link = uploader.upload_directory(chat_uploader, file_directory)
 
-        keyboard = []
+        row = [
+            InlineKeyboardButton(
+                "Copy link",
+                copy_text=CopyTextButton(text=image_link),
+                style="success"
+            )
+        ]
+
         if deletion_link is not None:
-            keyboard.append([InlineKeyboardButton("Delete", callback_data="/filedelete " + deletion_link)])
+            row.append(InlineKeyboardButton("Delete", callback_data="/filedelete " + deletion_link, style="danger"))
 
         await message.delete()
         await update.message.reply_text(f"✅ Saved! Here is your URL: [{image_link}]({image_link})",
             parse_mode=ParseMode.MARKDOWN,
             reply_to_message_id=update.message.message_id,
-            reply_markup=InlineKeyboardMarkup(keyboard))
+            reply_markup=InlineKeyboardMarkup([row]))
     except RuntimeError as e:
         await message.edit_text(f"🛑 {str(e)}")
     except Exception as e:
