@@ -3,6 +3,7 @@ import random
 import sqlite3
 import os
 import string
+import traceback
 from typing import Tuple
 import requests
 
@@ -25,7 +26,7 @@ class UploaderData:
         u = self.parsed_url()
         return u.scheme + "://" + u.hostname
 
-def init_uploader_db():
+def init_uploader_db() -> bool:
     cfg = utils.get_configuration()
 
     try:
@@ -43,12 +44,16 @@ def init_uploader_db():
             );
             """)
 
+        conn.commit()
         cur.close()
     except sqlite3.Error as e:
-        print(e)
+        traceback.print_tb(e.__traceback__)
+        return False
     finally:
         if conn:
             conn.close()
+
+    return True
 
 def get_uploader(chat_id: int) -> UploaderData|None:
     cfg = utils.get_configuration()
@@ -65,7 +70,8 @@ def get_uploader(chat_id: int) -> UploaderData|None:
         conn.commit()
         cur.close()
     except sqlite3.Error as e:
-        print(e)
+        traceback.print_tb(e.__traceback__)
+        return None
     finally:
         if conn:
             conn.close()
@@ -87,22 +93,43 @@ def set_uploader(chat_id: int, uploader: UploaderData):
 
         if already_exists:
             cur.execute(
-                f"UPDATE file_uploader_preferences SET url = ?, field = ?, headers = ?, image_link = ?, deletion_link = ? WHERE id = ?",
+                "UPDATE file_uploader_preferences SET url = ?, field = ?, headers = ?, image_link = ?, deletion_link = ? WHERE id = ?",
                 (uploader.url, uploader.field, uploader.headers, uploader.image_link, uploader.deletion_link, chat_id,)
             )
         else:
             cur.execute(
-                f"INSERT INTO file_uploader_preferences(id, url, field, headers, image_link, deletion_link) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO file_uploader_preferences(id, url, field, headers, image_link, deletion_link) VALUES (?, ?, ?, ?, ?, ?)",
                 (chat_id, uploader.url, uploader.field, uploader.headers, uploader.image_link, uploader.deletion_link,)
             )
 
         conn.commit()
         cur.close()
     except sqlite3.Error as e:
-        print(e)
+        traceback.print_tb(e.__traceback__)
+        return False
     finally:
         if conn:
             conn.close()
+
+    return True
+
+def delete_uploader(chat_id: int) -> bool:
+    cfg = utils.get_configuration()
+
+    try:
+        conn = sqlite3.connect(cfg["database"]["url"])
+        cur = conn.cursor()
+        cur.execute("DELETE FROM file_uploader_preferences WHERE id = ?", (chat_id,))
+        conn.commit()
+        cur.close()
+    except sqlite3.Error as e:
+        traceback.print_tb(e.__traceback__)
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+    return True
 
 def get_nested(data: dict, path: str) -> str | None:
     if path[0] == "{" and path[-1] == "}":

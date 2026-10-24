@@ -1,6 +1,10 @@
 from configparser import ConfigParser
 import os.path
-import sqlite3
+from typing import List
+
+from telegram import InlineKeyboardButton
+
+import uploader
 
 def get_configuration() -> ConfigParser:
     path = "mediauploaderbot.ini"
@@ -17,3 +21,18 @@ def get_configuration() -> ConfigParser:
         raise Exception("No database configuration found. Set 'url' field in [database] section.")
 
     return cfg
+
+def uploaders_to_buttons() -> List[List[InlineKeyboardButton]]:
+    keyboard = []
+    row = []
+
+    for k in uploader.ACCEPTABLE_UPLOADERS:
+        row.append(InlineKeyboardButton(k, callback_data="/setuploader " + k.lower()))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+
+    if len(row) != 0:
+        keyboard.append(row)
+
+    return keyboard

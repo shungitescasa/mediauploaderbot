@@ -10,7 +10,6 @@ def run():
 
     uploader.init_uploader_db()
 
-    print("Bot is running...")
     app = ApplicationBuilder().token(cfg['telegram']['token']).build()
     app.add_handler(MessageHandler(
         filters.PHOTO | filters.VIDEO | filters.VIDEO_NOTE |
@@ -20,7 +19,11 @@ def run():
     ))
     app.add_handler(CommandHandler("start", commands.user_introduction))
     app.add_handler(CommandHandler("url", commands.reupload_url))
+    app.add_handler(CommandHandler("edit", commands.edit_uploader))
     app.add_handler(CallbackQueryHandler(commands.inline_buttons))
+
+    print("Bot is ready to re-upload files...")
+
     app.run_polling()
 
 
