@@ -195,7 +195,7 @@ def upload_directory(chat_uploader: UploaderData, directory_path: str) -> Tuple[
             if 'data' in j and 'error' in j['data']:
                 text = j['data']['error']
 
-        raise Exception(f"Failed to upload a file ({response.status_code}): {text}")
+        raise RuntimeError(f"Failed to upload a file ({response.status_code}): {text}")
 
     if image_link:
         return (image_link, deletion_link)

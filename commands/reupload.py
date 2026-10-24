@@ -14,31 +14,46 @@ async def reupload_directory(message: Message, chat_uploader: uploader.UploaderD
     if update.message is None:
         return
 
-    try:
-        image_link, deletion_link = uploader.upload_directory(chat_uploader, file_directory)
+    image_link = None
+    deletion_link = None
 
-        row = [
-            InlineKeyboardButton(
-                "Copy link",
-                copy_text=CopyTextButton(text=image_link),
-                style="success"
-            )
-        ]
+    attempts = 0
+    exception = None
 
-        if deletion_link is not None:
-            row.append(InlineKeyboardButton("Delete", callback_data="/filedelete " + deletion_link, style="danger"))
+    while attempts < 3:
+        try:
+            image_link, deletion_link = uploader.upload_directory(chat_uploader, file_directory)
+            break
+        except Exception as e:
+            exception = e
+        attempts += 1
+        time.sleep(2)
 
+    if image_link == None:
+        text = "🛑 Error occurred while re-uploading files"
+        if exception is not None:
+            traceback.print_tb(exception.__traceback__)
+            text += ": " + str(exception)
         await message.delete()
-        await update.message.reply_text(f"✅ Saved! Here is your URL: [{image_link}]({image_link})",
-            parse_mode=ParseMode.MARKDOWN,
-            reply_to_message_id=update.message.message_id,
-            reply_markup=InlineKeyboardMarkup([row]))
-    except RuntimeError as e:
-        await message.edit_text(f"🛑 {str(e)}")
-    except Exception as e:
-        traceback.print_tb(e.__traceback__)
-        await message.delete()
-        await update.message.reply_text(f"🛑 Error occurred while re-uploading files: {str(e)}", reply_to_message_id=update.message.message_id)
+        await update.message.reply_text(text, reply_to_message_id=update.message.message_id)
+        return
+
+    row = [
+        InlineKeyboardButton(
+            "Copy link",
+            copy_text=CopyTextButton(text=image_link),
+            style="success"
+        )
+    ]
+
+    if deletion_link is not None:
+        row.append(InlineKeyboardButton("Delete", callback_data="/filedelete " + deletion_link, style="danger"))
+
+    await message.delete()
+    await update.message.reply_text(f"✅ Saved! Here is your URL: [{image_link}]({image_link})",
+        parse_mode=ParseMode.MARKDOWN,
+        reply_to_message_id=update.message.message_id,
+        reply_markup=InlineKeyboardMarkup([row]))
 
 async def download_telegram_file(update, file_id, file_directory):
     file = await update.get_bot().get_file(file_id)
@@ -77,24 +92,44 @@ async def reupload_file(update: Update, ctx: CallbackContext) -> None:
     if len(update.message.photo) != 0:
         attachments.append(update.message.photo[-1])
 
+    attachments = [x for x in attachments if x is not None]
+
+    # gif adds two attachments: Animation and Document, so we have to filter them by unique id
+    unique_attachments = {}
+    for attachment in attachments:
+        if attachment is None:
+            continue
+
+        file_id = getattr(attachment, "file_unique_id", None)
+        key = file_id if file_id else id(attachment)
+        unique_attachments[key] = attachment
+
+    attachments[:] = unique_attachments.values()
+
     processed_files = 0
     file_counter = 0
     failed_files = 0
+    attempts = 0
 
-    for attachment in attachments:
-        if attachment is not None:
+    while True:
+        for attachment in attachments.copy():
             processed_files += 1
             try:
                 await download_telegram_file(update, attachment, file_directory)
+                attachments.remove(attachment)
                 file_counter += 1
             except Exception as e:
                 failed_files += 1
                 traceback.print_tb(e.__traceback__)
 
-            await message.edit_text(f"⏳ Downloading... ({file_counter} finished files; {failed_files} failed files)")
+        if processed_files == 0 or len(attachments) == 0 or attempts > 5:
+            break
+
+        attempts += 1
+        time.sleep(1)
 
     if file_counter == 0:
-        await message.edit_text("❌ No files were downloaded")
+        await message.edit_text("❌ No files were downloaded. Please try again later!")
         return
 
     await message.edit_text(f"⏳ Re-uploading {file_counter} file(s)...")
